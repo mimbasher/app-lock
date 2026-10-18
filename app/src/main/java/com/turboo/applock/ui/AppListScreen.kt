@@ -27,6 +27,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
@@ -56,10 +57,12 @@ fun AppListScreen(
     state: AppListUiState,
     query: String,
     permissions: PermissionState,
+    selfLockEnabled: Boolean,
     onQueryChange: (String) -> Unit,
     onToggleLock: (String, Boolean) -> Unit,
     onRelockDelayChange: (Long) -> Unit,
     onThemeModeChange: (ThemeMode) -> Unit,
+    onSelfLockChange: (Boolean) -> Unit,
     onFixAccessibility: () -> Unit,
     onFixOverlay: () -> Unit,
     onFixBattery: () -> Unit,
@@ -118,6 +121,23 @@ fun AppListScreen(
                             )
                         }
                     }
+                    Spacer(Modifier.height(16.dp))
+
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text("Lock AppLock itself", style = MaterialTheme.typography.bodyLarge)
+                            Text(
+                                "Otherwise anyone holding your unlocked phone can open this screen and switch a lock off.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        Spacer(Modifier.width(16.dp))
+                        Switch(checked = selfLockEnabled, onCheckedChange = onSelfLockChange)
+                    }
+
+                    Spacer(Modifier.height(16.dp))
+                    HorizontalDivider()
                     Spacer(Modifier.height(16.dp))
 
                     OutlinedTextField(

@@ -30,6 +30,13 @@ class AppListViewModel(application: Application) : AndroidViewModel(application)
     private val allApps = MutableStateFlow<List<InstalledApp>>(emptyList())
     private val loading = MutableStateFlow(true)
 
+    /**
+     * Read directly rather than folded into [uiState]: the gate in MainActivity has
+     * to distinguish "not loaded yet" from "off", or it would flash the settings
+     * list before the preference arrives.
+     */
+    val selfLockEnabled = repository.selfLockEnabled
+
     private val _query = MutableStateFlow("")
     val query: StateFlow<String> = _query.asStateFlow()
 
@@ -81,6 +88,10 @@ class AppListViewModel(application: Application) : AndroidViewModel(application)
 
     fun setRelockDelay(millis: Long) {
         viewModelScope.launch { repository.setRelockDelay(millis) }
+    }
+
+    fun setSelfLockEnabled(enabled: Boolean) {
+        viewModelScope.launch { repository.setSelfLockEnabled(enabled) }
     }
 
     fun setThemeMode(mode: ThemeMode) {

@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
@@ -25,6 +26,14 @@ class LockRepository(private val context: Context) {
     /** 0 means "re-lock as soon as the user leaves the app". */
     val relockDelayMillis: Flow<Long> =
         context.dataStore.data.map { it[KEY_RELOCK_DELAY] ?: 0L }
+
+    /**
+     * Whether AppLock asks for authentication before showing its own settings.
+     * Defaults to on: without it, anyone holding the unlocked phone can simply
+     * open AppLock and switch a locked app off.
+     */
+    val selfLockEnabled: Flow<Boolean> =
+        context.dataStore.data.map { it[KEY_SELF_LOCK] ?: true }
 
     val themeMode: Flow<ThemeMode> =
         context.dataStore.data.map { ThemeMode.fromName(it[KEY_THEME_MODE]) }
@@ -49,6 +58,10 @@ class LockRepository(private val context: Context) {
         context.dataStore.edit { it[KEY_RELOCK_DELAY] = millis }
     }
 
+    suspend fun setSelfLockEnabled(enabled: Boolean) {
+        context.dataStore.edit { it[KEY_SELF_LOCK] = enabled }
+    }
+
     suspend fun setThemeMode(mode: ThemeMode) {
         context.dataStore.edit { it[KEY_THEME_MODE] = mode.name }
     }
@@ -57,5 +70,6 @@ class LockRepository(private val context: Context) {
         val KEY_LOCKED = stringSetPreferencesKey("locked_packages")
         val KEY_RELOCK_DELAY = longPreferencesKey("relock_delay_millis")
         val KEY_THEME_MODE = stringPreferencesKey("theme_mode")
+        val KEY_SELF_LOCK = booleanPreferencesKey("self_lock_enabled")
     }
 }
