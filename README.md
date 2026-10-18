@@ -1,10 +1,22 @@
 # AppLock
 
+[![Build APK](https://github.com/mimbasher/app-lock/actions/workflows/build.yml/badge.svg)](https://github.com/mimbasher/app-lock/actions/workflows/build.yml)
+
 Per-app lock for Android. Pick any installed app; the next time it comes to the
 foreground, a full-screen gate asks for your fingerprint, face, or the phone's own
 PIN/pattern/password before the app is revealed.
 
 Kotlin + Jetpack Compose, no third-party services, nothing leaves the device.
+
+| Pick what to lock | Finish setup | The gate |
+|---|---|---|
+| ![App picker](docs/screenshots/applist.png) | ![Setup checklist](docs/screenshots/setup.png) | ![Lock screen](docs/screenshots/gate.png) |
+| Locked apps float to the top. | Only missing grants are listed. | Shown the instant a locked app opens. |
+
+The gate normally raises the system biometric prompt over itself immediately. It
+is absent above because the real build sets `FLAG_SECURE`, and both it and the
+system prompt refuse to be screenshotted — so these were taken from a temporary
+build with that flag and the auto-prompt removed.
 
 ## How it works
 
