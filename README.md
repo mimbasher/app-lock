@@ -83,6 +83,16 @@ Change that line if your JDK lives elsewhere.
 adb install -r app/build/outputs/apk/debug/app-debug.apk
 ```
 
+### CI
+
+`.github/workflows/build.yml` lints and builds the debug APK on every push to
+`main`, on pull requests, and on demand via **Actions → Build APK → Run
+workflow**. The APK lands as the `app-debug` artifact on the run page, with the
+lint report beside it.
+
+The runner strips the `org.gradle.java.home` line from `gradle.properties`
+first, since that path is local to a developer machine.
+
 ## First-run setup
 
 The app shows a checklist for whatever is missing:
