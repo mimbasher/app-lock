@@ -17,7 +17,7 @@ jobs:
       # AGP does not run on JDK 26; gradle.properties pins a local JDK 21 path
       # that will not exist on the runner, so it is stripped here and JAVA_HOME
       # from this step is used instead.
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '21'
@@ -25,7 +25,12 @@ jobs:
       - name: Drop the local JDK pin
         run: sed -i '/^org.gradle.java.home=/d' gradle.properties
 
+      # packages: '' because the action otherwise installs the legacy `tools`
+      # package, which no longer exists in the SDK repository and fails the job.
+      # The runner image already ships the platform and build-tools we need.
       - uses: android-actions/setup-android@v3
+        with:
+          packages: ''
 
       - uses: gradle/actions/setup-gradle@v4
 
