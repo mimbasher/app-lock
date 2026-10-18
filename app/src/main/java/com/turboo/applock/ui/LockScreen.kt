@@ -20,20 +20,25 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.turboo.applock.data.ThemeMode
 import com.turboo.applock.ui.theme.AppLockTheme
 
 @Composable
 fun LockScreen(
     appLabel: String,
     appIcon: Bitmap?,
+    themeMode: ThemeMode,
     onUnlockClick: () -> Unit,
 ) {
-    AppLockTheme(darkTheme = true) {
-        Surface(modifier = Modifier.fillMaxSize(), color = Color.Black) {
+    AppLockTheme(themeMode) {
+        // Opaque by design: this has to completely hide the app underneath.
+        Surface(
+            modifier = Modifier.fillMaxSize(),
+            color = MaterialTheme.colorScheme.surface,
+        ) {
             Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
@@ -50,7 +55,7 @@ fun LockScreen(
                         Icon(
                             imageVector = Icons.Filled.Lock,
                             contentDescription = null,
-                            tint = Color.White,
+                            tint = MaterialTheme.colorScheme.onSurface,
                             modifier = Modifier.size(72.dp),
                         )
                     }
@@ -60,7 +65,7 @@ fun LockScreen(
                     Text(
                         text = appLabel,
                         style = MaterialTheme.typography.headlineSmall,
-                        color = Color.White,
+                        color = MaterialTheme.colorScheme.onSurface,
                         textAlign = TextAlign.Center,
                     )
 
@@ -69,7 +74,7 @@ fun LockScreen(
                     Text(
                         text = "Locked",
                         style = MaterialTheme.typography.bodyMedium,
-                        color = Color.White.copy(alpha = 0.6f),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
 
                     Spacer(Modifier.height(40.dp))

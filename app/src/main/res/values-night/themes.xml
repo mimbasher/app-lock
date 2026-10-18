@@ -1,0 +1,8 @@
+<resources>
+    <!--
+        Dark window background for the pre-Compose startup frame, so following the
+        system into dark mode does not flash white. A theme forced to DARK while the
+        device is light still gets one light frame; Compose takes over immediately after.
+    -->
+    <style name="Theme.AppLock" parent="android:Theme.Material.NoActionBar" />
+</resources>

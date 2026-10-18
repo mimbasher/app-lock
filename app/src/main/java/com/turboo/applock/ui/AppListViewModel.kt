@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.turboo.applock.AppLockApplication
 import com.turboo.applock.data.InstalledApp
 import com.turboo.applock.data.InstalledApps
+import com.turboo.applock.data.ThemeMode
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -18,6 +19,7 @@ data class AppListUiState(
     val apps: List<InstalledApp> = emptyList(),
     val lockedPackages: Set<String> = emptySet(),
     val relockDelayMillis: Long = 0L,
+    val themeMode: ThemeMode = ThemeMode.SYSTEM,
     val loading: Boolean = true,
 )
 
@@ -31,14 +33,19 @@ class AppListViewModel(application: Application) : AndroidViewModel(application)
     private val _query = MutableStateFlow("")
     val query: StateFlow<String> = _query.asStateFlow()
 
+    private val settings = combine(
+        repository.relockDelayMillis,
+        repository.themeMode,
+    ) { delay, theme -> delay to theme }
+
     val uiState: StateFlow<AppListUiState> =
         combine(
             allApps,
             repository.lockedPackages,
-            repository.relockDelayMillis,
+            settings,
             _query,
             loading,
-        ) { apps, locked, delay, query, isLoading ->
+        ) { apps, locked, (delay, theme), query, isLoading ->
             val filtered = if (query.isBlank()) {
                 apps
             } else {
@@ -52,6 +59,7 @@ class AppListViewModel(application: Application) : AndroidViewModel(application)
                 ),
                 lockedPackages = locked,
                 relockDelayMillis = delay,
+                themeMode = theme,
                 loading = isLoading,
             )
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), AppListUiState())
@@ -73,5 +81,9 @@ class AppListViewModel(application: Application) : AndroidViewModel(application)
 
     fun setRelockDelay(millis: Long) {
         viewModelScope.launch { repository.setRelockDelay(millis) }
+    }
+
+    fun setThemeMode(mode: ThemeMode) {
+        viewModelScope.launch { repository.setThemeMode(mode) }
     }
 }

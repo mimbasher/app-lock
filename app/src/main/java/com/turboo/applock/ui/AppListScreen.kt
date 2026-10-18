@@ -36,11 +36,18 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.turboo.applock.data.InstalledApp
+import com.turboo.applock.data.ThemeMode
 
 private val RELOCK_OPTIONS = listOf(
     "Immediately" to 0L,
     "After 1 min" to 60_000L,
     "After 5 min" to 300_000L,
+)
+
+private val THEME_OPTIONS = listOf(
+    "System" to ThemeMode.SYSTEM,
+    "Light" to ThemeMode.LIGHT,
+    "Dark" to ThemeMode.DARK,
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -52,6 +59,7 @@ fun AppListScreen(
     onQueryChange: (String) -> Unit,
     onToggleLock: (String, Boolean) -> Unit,
     onRelockDelayChange: (Long) -> Unit,
+    onThemeModeChange: (ThemeMode) -> Unit,
     onFixAccessibility: () -> Unit,
     onFixOverlay: () -> Unit,
     onFixBattery: () -> Unit,
@@ -90,6 +98,22 @@ fun AppListScreen(
                             FilterChip(
                                 selected = state.relockDelayMillis == millis,
                                 onClick = { onRelockDelayChange(millis) },
+                                label = { Text(label) },
+                            )
+                        }
+                    }
+                    Spacer(Modifier.height(16.dp))
+
+                    Text(
+                        "Theme",
+                        style = MaterialTheme.typography.labelLarge,
+                        modifier = Modifier.padding(bottom = 8.dp),
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        THEME_OPTIONS.forEach { (label, mode) ->
+                            FilterChip(
+                                selected = state.themeMode == mode,
+                                onClick = { onThemeModeChange(mode) },
                                 label = { Text(label) },
                             )
                         }

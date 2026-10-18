@@ -15,6 +15,7 @@ import androidx.core.content.ContextCompat
 import androidx.core.graphics.drawable.toBitmap
 import androidx.fragment.app.FragmentActivity
 import com.turboo.applock.data.InstalledApps
+import com.turboo.applock.AppLockApplication
 import com.turboo.applock.data.SessionGate
 
 /**
@@ -53,6 +54,8 @@ class LockScreenActivity : FragmentActivity() {
             LockScreen(
                 appLabel = label,
                 appIcon = icon,
+                // Read from the warm cache: this screen must paint immediately.
+                themeMode = AppLockApplication.repository().cachedThemeMode,
                 onUnlockClick = ::promptForAuth,
             )
         }

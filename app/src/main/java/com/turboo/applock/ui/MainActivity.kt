@@ -2,8 +2,10 @@ package com.turboo.applock.ui
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -14,6 +16,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.turboo.applock.Permissions
 import com.turboo.applock.service.ForegroundPollService
 import com.turboo.applock.ui.theme.AppLockTheme
+import com.turboo.applock.ui.theme.isDark
 
 class MainActivity : ComponentActivity() {
 
@@ -22,10 +25,21 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
 
         setContent {
-            AppLockTheme {
-                val vm: AppListViewModel = viewModel()
-                val state by vm.uiState.collectAsStateWithLifecycle()
-                val query by vm.query.collectAsStateWithLifecycle()
+            val vm: AppListViewModel = viewModel()
+            val state by vm.uiState.collectAsStateWithLifecycle()
+            val query by vm.query.collectAsStateWithLifecycle()
+
+            // Status/navigation bar icons have to be re-styled when the choice
+            // changes, otherwise dark icons end up on a dark bar.
+            val dark = state.themeMode.isDark()
+            LaunchedEffect(dark) {
+                enableEdgeToEdge(
+                    statusBarStyle = systemBarStyle(dark),
+                    navigationBarStyle = systemBarStyle(dark),
+                )
+            }
+
+            AppLockTheme(state.themeMode) {
 
                 // Permission state can only change outside the app, so it is re-read
                 // every time this screen comes back to the foreground.
@@ -44,6 +58,7 @@ class MainActivity : ComponentActivity() {
                     onQueryChange = vm::onQueryChange,
                     onToggleLock = vm::toggleLock,
                     onRelockDelayChange = vm::setRelockDelay,
+                    onThemeModeChange = vm::setThemeMode,
                     onFixAccessibility = { Permissions.openAccessibilitySettings(this) },
                     onFixOverlay = { Permissions.openOverlaySettings(this) },
                     onFixBattery = { Permissions.requestIgnoreBatteryOptimizations(this) },
@@ -52,6 +67,16 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
+
+    private fun systemBarStyle(dark: Boolean): SystemBarStyle =
+        if (dark) {
+            SystemBarStyle.dark(android.graphics.Color.TRANSPARENT)
+        } else {
+            SystemBarStyle.light(
+                android.graphics.Color.TRANSPARENT,
+                android.graphics.Color.TRANSPARENT,
+            )
+        }
 
     private fun readPermissions() = PermissionState(
         accessibility = Permissions.isAccessibilityEnabled(this),

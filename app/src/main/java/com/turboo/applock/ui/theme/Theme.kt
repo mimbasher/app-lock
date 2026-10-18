@@ -6,11 +6,10 @@ import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
-
-private val Accent = Color(0xFF2E7DB8)
+import com.turboo.applock.data.ThemeMode
 
 private val LightColors = lightColorScheme(
-    primary = Accent,
+    primary = Color(0xFF2E7DB8),
     secondary = Color(0xFF4A6572),
 )
 
@@ -19,13 +18,21 @@ private val DarkColors = darkColorScheme(
     secondary = Color(0xFFB0C6D2),
 )
 
+/** Resolves [ThemeMode.SYSTEM] against the current device setting. */
+@Composable
+fun ThemeMode.isDark(): Boolean = when (this) {
+    ThemeMode.SYSTEM -> isSystemInDarkTheme()
+    ThemeMode.LIGHT -> false
+    ThemeMode.DARK -> true
+}
+
 @Composable
 fun AppLockTheme(
-    darkTheme: Boolean = isSystemInDarkTheme(),
+    themeMode: ThemeMode = ThemeMode.SYSTEM,
     content: @Composable () -> Unit,
 ) {
     MaterialTheme(
-        colorScheme = if (darkTheme) DarkColors else LightColors,
+        colorScheme = if (themeMode.isDark()) DarkColors else LightColors,
         content = content,
     )
 }

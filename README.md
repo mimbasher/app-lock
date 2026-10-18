@@ -75,6 +75,17 @@ app/src/main/java/com/turboo/applock/
     └── LockScreen.kt            Gate UI
 ```
 
+### Theme
+
+**System**, **Light** or **Dark**, chosen in the app and stored with the other
+settings; **System** is the default and follows the device.
+
+The choice also applies to the gate, which has to colour itself the instant it
+is created. A suspending read there would flash the wrong scheme over the app
+being covered, so `AppLockApplication` keeps the last value in
+`LockRepository.cachedThemeMode` for the life of the process and the gate reads
+that synchronously.
+
 ### Session rules
 
 `SessionGate` holds unlocks in memory only — a reboot or process death means everything
