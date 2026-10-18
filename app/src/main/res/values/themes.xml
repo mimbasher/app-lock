@@ -1,0 +1,9 @@
+<resources>
+    <style name="Theme.AppLock" parent="android:Theme.Material.Light.NoActionBar" />
+
+    <style name="Theme.AppLock.Lock" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@android:color/black</item>
+        <item name="android:windowAnimationStyle">@null</item>
+        <item name="android:windowIsTranslucent">false</item>
+    </style>
+</resources>
