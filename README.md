@@ -105,6 +105,40 @@ lint report beside it.
 The runner strips the `org.gradle.java.home` line from `gradle.properties`
 first, since that path is local to a developer machine.
 
+### Releases
+
+Pushing a `v*` tag runs `.github/workflows/release.yml`, which builds the APK
+and attaches it to a GitHub Release, giving a permanent public download link
+(Actions artifacts expire and need a login; release assets do not).
+
+```sh
+git tag v1.0 && git push origin v1.0
+```
+
+Without a signing keystore it publishes the **debug-signed** APK. That installs
+fine for sideloading, but it is debuggable, and a later signed release cannot
+upgrade it in place — Android refuses an update signed by a different key, so
+users would have to uninstall first.
+
+To publish properly signed builds, create a keystore and add four repository
+secrets:
+
+```sh
+keytool -genkey -v -keystore applock.jks -alias applock \
+  -keyalg RSA -keysize 2048 -validity 10000
+base64 -w0 applock.jks          # paste as KEYSTORE_BASE64
+```
+
+| Secret | Value |
+|---|---|
+| `KEYSTORE_BASE64` | the base64 above |
+| `KEYSTORE_PASSWORD` | keystore password |
+| `KEY_ALIAS` | `applock` |
+| `KEY_PASSWORD` | key password |
+
+Keep `applock.jks` safe and out of the repo; losing it means never being able
+to update an installed copy again.
+
 ## First-run setup
 
 The app shows a checklist for whatever is missing:
