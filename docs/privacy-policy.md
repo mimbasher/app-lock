@@ -66,6 +66,4 @@ and the date above will change.
 ## Contact
 
 Questions about this policy, or about AppLock's privacy behaviour generally, can
-be raised as an issue at
-<https://github.com/mimbasher/app-lock/issues>, or by email to
-`<add your contact address before publishing>`.
+be raised as an issue at <https://github.com/mimbasher/app-lock/issues>.
