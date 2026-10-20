@@ -9,3 +9,9 @@ captures/
 .cxx
 *.apk
 *.aab
+
+# Signing keys. Never commit these — a leaked upload key lets anyone
+# publish a build that Android accepts as an update to yours.
+*.jks
+*.keystore
+keystore.properties

@@ -7,27 +7,40 @@ on:
     branches: [main]
   workflow_dispatch:
 
+# Needed so a push to main can publish its release.
+permissions:
+  contents: write
+
+# One release at a time; a superseded run has nothing useful left to publish.
+concurrency:
+  group: build-apk
+  cancel-in-progress: true
+
 jobs:
   build:
     runs-on: ubuntu-latest
 
+    env:
+      KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+      # run_number is monotonic per workflow, so this only ever goes up.
+      VERSION: 1.${{ github.run_number }}
+      # Releases happen on pushes to main; pull requests only build.
+      RELEASING: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+
     steps:
       - uses: actions/checkout@v4
 
-      # AGP does not run on JDK 26; gradle.properties pins a local JDK 21 path
-      # that will not exist on the runner, so it is stripped here and JAVA_HOME
-      # from this step is used instead.
       - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '21'
 
+      # The pin points at a path that only exists on a developer machine.
       - name: Drop the local JDK pin
         run: sed -i '/^org.gradle.java.home=/d' gradle.properties
 
       # packages: '' because the action otherwise installs the legacy `tools`
       # package, which no longer exists in the SDK repository and fails the job.
-      # The runner image already ships the platform and build-tools we need.
       - uses: android-actions/setup-android@v3
         with:
           packages: ''
@@ -35,20 +48,94 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
 
       - name: Lint
-        run: ./gradlew lintDebug
+        run: |
+          ./gradlew lintGithubDebug lintPlayDebug \
+            -PbuildNumber=${{ github.run_number }} -PappVersionName=$VERSION
+
+      # ---- signed build, when a keystore is configured ----
+
+      - name: Decode keystore
+        if: env.KEYSTORE_BASE64 != ''
+        run: echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/keystore.jks"
+
+      - name: Build and sign release APK
+        if: env.KEYSTORE_BASE64 != ''
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          ./gradlew assembleGithubRelease -PbuildNumber=${{ github.run_number }} -PappVersionName=$VERSION
+          BUILD_TOOLS="$(find "$ANDROID_HOME/build-tools" -maxdepth 1 -mindepth 1 -type d | sort -V | tail -1)"
+          "$BUILD_TOOLS/zipalign" -p -f 4 \
+            app/build/outputs/apk/github/release/app-github-release-unsigned.apk \
+            "$RUNNER_TEMP/aligned.apk"
+          "$BUILD_TOOLS/apksigner" sign \
+            --ks "$RUNNER_TEMP/keystore.jks" \
+            --ks-pass "env:KEYSTORE_PASSWORD" \
+            --ks-key-alias "$KEY_ALIAS" \
+            --key-pass "env:KEY_PASSWORD" \
+            --out "applock-v$VERSION.apk" "$RUNNER_TEMP/aligned.apk"
+          "$BUILD_TOOLS/apksigner" verify --print-certs "applock-v$VERSION.apk"
+
+      # Play distributes the `play` flavour, which has no self-updater. Uploaded as
+      # a workflow artifact rather than attached to the release: an AAB is only
+      # useful to Play Console, and would confuse anyone looking for a sideload APK.
+      - name: Build and sign Play bundle
+        if: env.KEYSTORE_BASE64 != ''
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          ./gradlew bundlePlayRelease -PbuildNumber=${{ github.run_number }} -PappVersionName=$VERSION
+          jarsigner -keystore "$RUNNER_TEMP/keystore.jks" \
+            -storepass:env KEYSTORE_PASSWORD -keypass:env KEY_PASSWORD \
+            -sigalg SHA256withRSA -digestalg SHA-256 \
+            -signedjar "applock-v$VERSION.aab" \
+            app/build/outputs/bundle/playRelease/app-play-release.aab "$KEY_ALIAS"
+
+      - name: Remove keystore
+        if: always()
+        run: rm -f "$RUNNER_TEMP/keystore.jks"
+
+      # ---- debug build, until a keystore exists ----
 
       - name: Build debug APK
-        run: ./gradlew assembleDebug
+        if: env.KEYSTORE_BASE64 == ''
+        run: |
+          set -euo pipefail
+          ./gradlew assembleGithubDebug -PbuildNumber=${{ github.run_number }} -PappVersionName=$VERSION
+          cp app/build/outputs/apk/github/debug/app-github-debug.apk "applock-v$VERSION.apk"
 
       - uses: actions/upload-artifact@v4
         with:
-          name: app-debug
-          path: app/build/outputs/apk/debug/app-debug.apk
+          name: applock-v${{ github.run_number }}
+          path: |
+            applock-v*.apk
+            applock-v*.aab
           if-no-files-found: error
 
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: lint-report
-          path: app/build/reports/lint-results-debug.html
-          if-no-files-found: ignore
+      # ---- publish, pushes to main only ----
+
+      - name: Publish release
+        if: env.RELEASING == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if [ -n "$KEYSTORE_BASE64" ]; then
+            SIGNING="Signed release build."
+          else
+            SIGNING=$'**Debug-signed build** — no signing keystore is configured yet. It installs fine, but a later signed build cannot upgrade it in place; you would have to uninstall first.'
+          fi
+          gh release create "v$VERSION" \
+            --title "v$VERSION" \
+            --latest \
+            --notes "$(printf '%s\n\n%s\n\n%s' \
+                "$SIGNING" \
+                "Tap **applock-v$VERSION.apk** below to install." \
+                "Built from ${GITHUB_SHA::7} — $(git log -1 --pretty=%s)")" \
+            "applock-v$VERSION.apk"
