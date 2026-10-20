@@ -2,14 +2,17 @@ package com.turboo.applock.ui
 
 import android.os.Bundle
 import androidx.activity.SystemBarStyle
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.fragment.app.FragmentActivity
@@ -22,6 +25,9 @@ import com.turboo.applock.R
 import com.turboo.applock.service.ForegroundPollService
 import com.turboo.applock.ui.theme.AppLockTheme
 import com.turboo.applock.ui.theme.isDark
+import com.turboo.applock.update.UpdateInstaller
+
+private enum class Screen { ONBOARDING, HOME, SETTINGS }
 
 /** FragmentActivity rather than ComponentActivity: BiometricPrompt requires one. */
 class MainActivity : FragmentActivity() {
@@ -34,6 +40,7 @@ class MainActivity : FragmentActivity() {
             val vm: AppListViewModel = viewModel()
             val state by vm.uiState.collectAsStateWithLifecycle()
             val query by vm.query.collectAsStateWithLifecycle()
+            val updateState by vm.updateState.collectAsStateWithLifecycle()
 
             // null while the preference is still being read. Rendering the list in
             // that window would show the settings to someone who should not see them.
@@ -58,49 +65,22 @@ class MainActivity : FragmentActivity() {
                 }
 
                 when {
-                    selfLock == null ->
-                        Surface(Modifier.fillMaxSize()) {}
-
+                    selfLock == null -> Surface(Modifier.fillMaxSize()) {}
                     selfLock == false || unlocked ->
-                        Settings(
-                            state = state,
-                            query = query,
-                            selfLockEnabled = selfLock == true,
-                            vm = vm,
-                        )
-
-                    else -> {
-                        LockScreen(
-                            appLabel = getString(R.string.app_name),
-                            appIcon = null,
-                            themeMode = state.themeMode,
-                            onUnlockClick = { promptForSelfUnlock { unlocked = true } },
-                        )
-
-                        // Raise the prompt on resume rather than on composition: when
-                        // returning from the background this branch is re-composed while
-                        // the activity is still stopped, and a prompt asked for then is
-                        // simply swallowed, leaving the user to tap Unlock by hand.
-                        var prompted by remember { mutableStateOf(false) }
-                        LifecycleResumeEffect(Unit) {
-                            if (!prompted) {
-                                prompted = true
-                                promptForSelfUnlock { unlocked = true }
-                            }
-                            onPauseOrDispose { prompted = false }
-                        }
-                    }
+                        UnlockedApp(vm, state, query, updateState, selfLock == true)
+                    else -> SelfLockGate(themeMode = state.themeMode) { unlocked = true }
                 }
             }
         }
     }
 
-    @androidx.compose.runtime.Composable
-    private fun Settings(
+    @Composable
+    private fun UnlockedApp(
+        vm: AppListViewModel,
         state: AppListUiState,
         query: String,
+        updateState: UpdateState,
         selfLockEnabled: Boolean,
-        vm: AppListViewModel,
     ) {
         // Permission state can only change outside the app, so it is re-read
         // every time this screen comes back to the foreground.
@@ -112,22 +92,89 @@ class MainActivity : FragmentActivity() {
             onPauseOrDispose { }
         }
 
-        AppListScreen(
-            state = state,
-            query = query,
-            permissions = permissions,
-            selfLockEnabled = selfLockEnabled,
-            onQueryChange = vm::onQueryChange,
-            onToggleLock = vm::toggleLock,
-            onRelockDelayChange = vm::setRelockDelay,
-            onThemeModeChange = vm::setThemeMode,
-            onSelfLockChange = vm::setSelfLockEnabled,
-            onFixAccessibility = { Permissions.openAccessibilitySettings(this) },
-            onFixOverlay = { Permissions.openOverlaySettings(this) },
-            onFixBattery = { Permissions.requestIgnoreBatteryOptimizations(this) },
-            onFixUsageAccess = { Permissions.openUsageAccessSettings(this) },
-        )
+        // Start on setup when the app cannot actually lock anything yet.
+        var screen by rememberSaveable {
+            mutableStateOf(if (permissions.allCriticalGranted) Screen.HOME else Screen.ONBOARDING)
+        }
+
+        BackHandler(enabled = screen != Screen.HOME) { screen = Screen.HOME }
+
+        when (screen) {
+            Screen.ONBOARDING -> OnboardingScreen(
+                permissions = permissions,
+                onFixAccessibility = { Permissions.openAccessibilitySettings(this) },
+                onFixUsageAccess = { Permissions.openUsageAccessSettings(this) },
+                onFixOverlay = { Permissions.openOverlaySettings(this) },
+                onFixBattery = { Permissions.requestIgnoreBatteryOptimizations(this) },
+                onSkip = { screen = Screen.HOME },
+            )
+
+            Screen.HOME -> HomeScreen(
+                state = state,
+                query = query,
+                updateState = updateState,
+                onQueryChange = vm::onQueryChange,
+                onFilterChange = vm::setFilter,
+                onToggleLock = vm::toggleLock,
+                onOpenSettings = { screen = Screen.SETTINGS },
+                onDownloadUpdate = vm::downloadUpdate,
+                onInstallUpdate = ::installUpdate,
+                onDismissUpdate = vm::dismissUpdate,
+            )
+
+            Screen.SETTINGS -> SettingsScreen(
+                state = state,
+                selfLockEnabled = selfLockEnabled,
+                versionName = installedVersionName(),
+                permissionsComplete = permissions.allCriticalGranted,
+                onBack = { screen = Screen.HOME },
+                onRelockDelayChange = vm::setRelockDelay,
+                onThemeModeChange = vm::setThemeMode,
+                onSelfLockChange = vm::setSelfLockEnabled,
+                onCheckForUpdates = { vm.checkForUpdate(userInitiated = true); screen = Screen.HOME },
+                onOpenSetup = { screen = Screen.ONBOARDING },
+            )
+        }
     }
+
+    @Composable
+    private fun SelfLockGate(
+        themeMode: com.turboo.applock.data.ThemeMode,
+        onUnlocked: () -> Unit,
+    ) {
+        LockScreen(
+            appLabel = getString(R.string.app_name),
+            appIcon = null,
+            themeMode = themeMode,
+            onUnlockClick = { promptForSelfUnlock(onUnlocked) },
+        )
+
+        // Raise the prompt on resume rather than on composition: when returning from
+        // the background this branch is re-composed while the activity is still
+        // stopped, and a prompt asked for then is simply swallowed, leaving the user
+        // to tap Unlock by hand.
+        var prompted by remember { mutableStateOf(false) }
+        LifecycleResumeEffect(Unit) {
+            if (!prompted) {
+                prompted = true
+                promptForSelfUnlock(onUnlocked)
+            }
+            onPauseOrDispose { prompted = false }
+        }
+    }
+
+    /** Android always confirms a sideloaded install; this only gets us to that dialog. */
+    private fun installUpdate(apk: java.io.File) {
+        if (UpdateInstaller.canInstall(this)) {
+            UpdateInstaller.install(this, apk)
+        } else {
+            UpdateInstaller.openInstallPermissionSettings(this)
+        }
+    }
+
+    private fun installedVersionName(): String = runCatching {
+        packageManager.getPackageInfo(packageName, 0).versionName
+    }.getOrNull() ?: "unknown"
 
     private fun promptForSelfUnlock(onUnlocked: () -> Unit) {
         promptForUnlock(

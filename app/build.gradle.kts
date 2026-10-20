@@ -4,22 +4,47 @@ plugins {
     alias(libs.plugins.kotlin.compose)
 }
 
+// CI passes -PbuildNumber=<run number>; local builds fall back to a dev version.
+// versionName has to match the release tag or the in-app update check compares
+// against a stale number and keeps offering the same update forever.
+val buildNumber = (project.findProperty("buildNumber") as String?)?.toIntOrNull() ?: 0
+val appVersionName = (project.findProperty("appVersionName") as String?) ?: "1.0-dev"
+
 android {
     namespace = "com.turboo.applock"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.turboo.applock"
         minSdk = 26
-        targetSdk = 35
-        versionCode = 1
-        versionName = "1.0"
+        targetSdk = 36
+        // versionCode must increase for Android to install an update in place.
+        versionCode = buildNumber.coerceAtLeast(1)
+        versionName = appVersionName
     }
 
     buildTypes {
         release {
             isMinifyEnabled = false
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+        }
+    }
+
+    // Google Play forbids an app that downloads and installs its own APK, so the
+    // self-updater cannot ship in a Play build. Both flavours compile against the
+    // same `update` API; `play` supplies inert stubs from src/play, and the
+    // INTERNET, REQUEST_INSTALL_PACKAGES and FileProvider entries live in
+    // src/github/AndroidManifest.xml, so the Play build has no network access at all.
+    flavorDimensions += "distribution"
+    productFlavors {
+        create("github") {
+            dimension = "distribution"
+            isDefault = true
+            buildConfigField("boolean", "SELF_UPDATE", "true")
+        }
+        create("play") {
+            dimension = "distribution"
+            buildConfigField("boolean", "SELF_UPDATE", "false")
         }
     }
 
@@ -32,6 +57,8 @@ android {
     }
     buildFeatures {
         compose = true
+        // For BuildConfig.SELF_UPDATE, which hides the updater UI in the Play build.
+        buildConfig = true
     }
 
     lint {
