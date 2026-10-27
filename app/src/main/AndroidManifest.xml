@@ -2,14 +2,11 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
-    <!-- See every launchable app so the user can pick which ones to lock. -->
     <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES"
         tools:ignore="QueryAllPackagesPermission" />
 
-    <!-- Lets us start the lock screen from the background (Android 10+ restriction). -->
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
 
-    <!-- Fallback foreground-app detection; granted by the user in Settings. -->
     <uses-permission android:name="android.permission.PACKAGE_USAGE_STATS"
         tools:ignore="ProtectedPermissions" />
 
@@ -38,11 +35,6 @@
             </intent-filter>
         </activity>
 
-        <!--
-            The lock screen. Its own task (taskAffinity="") so it never mixes with
-            MainActivity; singleInstance so repeated launches reuse one instance;
-            excludeFromRecents + FLAG_SECURE so it leaks nothing to the recents UI.
-        -->
         <activity
             android:name=".ui.LockScreenActivity"
             android:exported="false"
@@ -66,13 +58,18 @@
         </service>
 
         <service
-            android:name=".service.ForegroundPollService"
+            android:name=".service.LockGuardService"
             android:exported="false"
             android:foregroundServiceType="specialUse">
             <property
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
                 android:value="Watches which app is in the foreground to re-lock user-selected apps" />
         </service>
+
+        <service
+            android:name=".service.WatchdogJob"
+            android:exported="false"
+            android:permission="android.permission.BIND_JOB_SERVICE" />
 
         <receiver
             android:name=".receiver.BootReceiver"

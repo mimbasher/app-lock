@@ -3,6 +3,7 @@ package com.turboo.applock
 import android.app.AppOpsManager
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.os.Build
 import android.os.PowerManager
 import android.provider.Settings
@@ -10,8 +11,16 @@ import androidx.core.net.toUri
 import android.text.TextUtils
 import com.turboo.applock.service.AppWatchService
 
-/** Every special permission this app needs, and the Settings screen that grants it. */
 object Permissions {
+    fun settingsPackage(context: Context): String? =
+        context.packageManager
+            .resolveActivity(
+                Intent(Settings.ACTION_SETTINGS),
+                PackageManager.MATCH_DEFAULT_ONLY,
+            )
+            ?.activityInfo
+            ?.packageName
+            ?.takeIf { it.isNotBlank() && it != "android" }
 
     fun isAccessibilityEnabled(context: Context): Boolean {
         val expected = "${context.packageName}/${AppWatchService::class.java.name}"

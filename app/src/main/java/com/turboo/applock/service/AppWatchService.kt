@@ -18,36 +18,20 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-/**
- * The watcher. Android fires [AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED] the moment a
- * new window comes to the front, which gives us the foreground package with no polling
- * and no measurable battery cost.
- *
- * We never read window content (`canRetrieveWindowContent="false"` in the config) — the
- * package name arrives on the event itself.
- */
 class AppWatchService : AccessibilityService() {
-
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
-    /** Snapshots of persisted state, so [onAccessibilityEvent] never has to suspend. */
     private val selfPackage: String by lazy { applicationContext.packageName }
 
     @Volatile
     private var lockedPackages: Set<String> = emptySet()
 
-    /**
-     * Packages that own a launcher icon. Window-state events also fire for keyboards,
-     * the status bar and system popups; treating those as "the user switched app" would
-     * spend the unlock and re-prompt constantly, so anything not launchable is ignored.
-     */
     @Volatile
     private var launchablePackages: Set<String> = emptySet()
 
     private val screenReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             if (intent?.action == Intent.ACTION_SCREEN_OFF) {
-                // Screen off is the natural end of a session: everything locks again.
                 SessionGate.clearAll()
             }
         }
@@ -62,6 +46,8 @@ class AppWatchService : AccessibilityService() {
     override fun onServiceConnected() {
         super.onServiceConnected()
         isRunning = true
+
+        LockGuardService.ensureRunning(this)
 
         val repository = AppLockApplication.repository()
         scope.launch {
@@ -124,6 +110,8 @@ class AppWatchService : AccessibilityService() {
     override fun onUnbind(intent: Intent?): Boolean {
         isRunning = false
         SessionGate.clearAll()
+
+        LockGuardService.ensureRunning(applicationContext)
         runCatching { unregisterReceiver(screenReceiver) }
         runCatching { unregisterReceiver(packageReceiver) }
         scope.cancel()

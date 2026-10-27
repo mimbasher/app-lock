@@ -8,7 +8,6 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 
 class AppLockApplication : Application() {
-
     val repository: LockRepository by lazy { LockRepository(this) }
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
@@ -17,10 +16,12 @@ class AppLockApplication : Application() {
         super.onCreate()
         instance = this
 
-        // Keep the theme choice warm for the whole process, so the lock screen can
-        // colour itself synchronously instead of flashing the wrong scheme.
         scope.launch {
             repository.themeMode.collect { repository.cachedThemeMode = it }
+        }
+
+        scope.launch {
+            repository.lockedPackages.collect { repository.cachedLockedPackages = it }
         }
     }
 
