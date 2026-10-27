@@ -22,16 +22,14 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.turboo.applock.Permissions
 import com.turboo.applock.R
-import com.turboo.applock.service.ForegroundPollService
+import com.turboo.applock.service.LockGuardService
 import com.turboo.applock.ui.theme.AppLockTheme
 import com.turboo.applock.ui.theme.isDark
 import com.turboo.applock.update.UpdateInstaller
 
 private enum class Screen { ONBOARDING, HOME, SETTINGS }
 
-/** FragmentActivity rather than ComponentActivity: BiometricPrompt requires one. */
 class MainActivity : FragmentActivity() {
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -42,12 +40,8 @@ class MainActivity : FragmentActivity() {
             val query by vm.query.collectAsStateWithLifecycle()
             val updateState by vm.updateState.collectAsStateWithLifecycle()
 
-            // null while the preference is still being read. Rendering the list in
-            // that window would show the settings to someone who should not see them.
             val selfLock by vm.selfLockEnabled.collectAsStateWithLifecycle(initialValue = null)
 
-            // Status/navigation bar icons have to be re-styled when the choice
-            // changes, otherwise dark icons end up on a dark bar.
             val dark = state.themeMode.isDark()
             LaunchedEffect(dark) {
                 enableEdgeToEdge(
@@ -59,7 +53,6 @@ class MainActivity : FragmentActivity() {
             AppLockTheme(state.themeMode) {
                 var unlocked by remember { mutableStateOf(false) }
 
-                // Leaving AppLock re-locks it, so returning asks again.
                 LifecycleStartEffect(Unit) {
                     onStopOrDispose { unlocked = false }
                 }
@@ -82,17 +75,14 @@ class MainActivity : FragmentActivity() {
         updateState: UpdateState,
         selfLockEnabled: Boolean,
     ) {
-        // Permission state can only change outside the app, so it is re-read
-        // every time this screen comes back to the foreground.
         var permissions by remember { mutableStateOf(readPermissions()) }
+        val settingsPackage = remember { Permissions.settingsPackage(this) }
         LifecycleResumeEffect(Unit) {
             permissions = readPermissions()
-            // No accessibility service but usage access granted: run the poller.
-            ForegroundPollService.startIfNeeded(this@MainActivity)
+            LockGuardService.ensureRunning(this@MainActivity)
             onPauseOrDispose { }
         }
 
-        // Start on setup when the app cannot actually lock anything yet.
         var screen by rememberSaveable {
             mutableStateOf(if (permissions.allCriticalGranted) Screen.HOME else Screen.ONBOARDING)
         }
@@ -113,9 +103,17 @@ class MainActivity : FragmentActivity() {
                 state = state,
                 query = query,
                 updateState = updateState,
+                permissions = permissions,
+                settingsPackage = settingsPackage,
+                onOpenSetup = { screen = Screen.ONBOARDING },
+                onLockPackage = { vm.toggleLock(it, true) },
+                onDismissSettingsTip = vm::dismissSettingsTip,
                 onQueryChange = vm::onQueryChange,
                 onFilterChange = vm::setFilter,
-                onToggleLock = vm::toggleLock,
+                onToggleLock = { packageName, locked ->
+                    vm.toggleLock(packageName, locked)
+                    if (locked) LockGuardService.ensureRunning(this, force = true)
+                },
                 onOpenSettings = { screen = Screen.SETTINGS },
                 onDownloadUpdate = vm::downloadUpdate,
                 onInstallUpdate = ::installUpdate,
@@ -149,10 +147,6 @@ class MainActivity : FragmentActivity() {
             onUnlockClick = { promptForSelfUnlock(onUnlocked) },
         )
 
-        // Raise the prompt on resume rather than on composition: when returning from
-        // the background this branch is re-composed while the activity is still
-        // stopped, and a prompt asked for then is simply swallowed, leaving the user
-        // to tap Unlock by hand.
         var prompted by remember { mutableStateOf(false) }
         LifecycleResumeEffect(Unit) {
             if (!prompted) {
@@ -163,7 +157,6 @@ class MainActivity : FragmentActivity() {
         }
     }
 
-    /** Android always confirms a sideloaded install; this only gets us to that dialog. */
     private fun installUpdate(apk: java.io.File) {
         if (UpdateInstaller.canInstall(this)) {
             UpdateInstaller.install(this, apk)
@@ -181,7 +174,7 @@ class MainActivity : FragmentActivity() {
             title = getString(R.string.unlock_title, getString(R.string.app_name)),
             subtitle = getString(R.string.unlock_subtitle),
             onSuccess = onUnlocked,
-            // Close rather than go home: the user came from somewhere, send them back.
+
             onCancelled = { finish() },
             onUnavailable = onUnlocked,
         )
@@ -211,6 +204,5 @@ data class PermissionState(
     val batteryExempt: Boolean,
     val usageAccess: Boolean,
 ) {
-    /** Either watcher will do, but without the overlay grant neither can show a lock screen. */
     val allCriticalGranted: Boolean get() = (accessibility || usageAccess) && overlay
 }

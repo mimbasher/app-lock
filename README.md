@@ -34,16 +34,37 @@ user can interact with it.
 
 ### Two watchers
 
-| | `AppWatchService` (primary) | `ForegroundPollService` (fallback) |
+| | `AppWatchService` (primary) | `LockGuardService` (fallback mode) |
 |---|---|---|
 | Mechanism | `AccessibilityService`, `TYPE_WINDOW_STATE_CHANGED` events | Polls `UsageStatsManager` every 300 ms |
 | Latency | Effectively instant | 200–700 ms — the app flashes into view first |
 | Battery | Negligible, event-driven | Noticeable; needs a foreground-service notification |
 | Grant | Settings → Accessibility | Settings → Special access → Usage access |
 
-The accessibility route is strongly preferred. The poller exists only for users who
-would rather not enable an accessibility service; it starts automatically when usage
-access is granted and the accessibility service is off.
+The accessibility route is strongly preferred. Polling exists for users who would
+rather not enable an accessibility service, and as the takeover path when the
+accessibility service dies.
+
+### Staying alive
+
+An accessibility service alone is not enough: when Android, an OEM battery manager or
+a recents swipe kills the process, nothing re-arms the watcher and every locked app
+opens freely until AppLock is launched again.
+
+`LockGuardService` exists to close that. It runs as a foreground service whenever
+anything is locked, which keeps the process — and the accessibility service living in
+it — near the back of the queue when Android reclaims memory. On a 5-second heartbeat
+it checks whether a watcher is genuinely live, falls back to polling if the
+accessibility service has gone away (including when its toggle still reads "on" but
+Android never re-bound it), and names the mode actually in force in its notification.
+`WatchdogJob`, a persisted periodic job, restarts the guard if the process is killed
+anyway. When nothing is protecting anything, a high-priority notification and a card
+on the home screen say so, rather than failing silently.
+
+None of this survives a **force stop**: that cancels our jobs along with everything
+else, and no unprivileged app can schedule its way out of it. Reaching the force-stop
+button means reaching Settings, so locking Settings itself is the only defence AppLock
+can offer there.
 
 The accessibility service declares `canRetrieveWindowContent="false"` — the package
 name arrives on the event itself, so the app never reads screen contents.
@@ -68,8 +89,9 @@ app/src/main/java/com/turboo/applock/
 │   └── ThemeMode.kt             System / Light / Dark
 ├── service/
 │   ├── AppWatchService.kt       AccessibilityService watcher
-│   └── ForegroundPollService.kt UsageStats polling fallback
-├── receiver/BootReceiver.kt     Restarts the poller after a reboot
+│   ├── LockGuardService.kt      Keeps the process resident; polls if the watcher dies
+│   └── WatchdogJob.kt           Persisted job that restarts the guard after a kill
+├── receiver/BootReceiver.kt     Starts the guard after a reboot
 ├── update/AvailableUpdate.kt    A release newer than the installed one; shared by both flavours
 └── ui/
     ├── MainActivity.kt          Compose host: onboarding/home/settings, and the self-lock gate
@@ -200,14 +222,21 @@ The app shows a checklist for whatever is missing:
    launching from the background.
 3. **Battery optimisation off** — optional, but Android may otherwise kill the watcher.
 
+The home screen also recommends locking the Settings app once, dismissibly. Force
+stop, the accessibility toggle and uninstall all live in Settings, so locking it means
+each of those needs authentication first — the closest an unprivileged app gets to
+tamper protection.
+
 ## Known limits
 
 These are inherent to doing this without system privileges:
 
-- A user can disable the accessibility service in Settings, or uninstall the app.
-  Blocking that needs Device Admin, which is heavily restricted.
+- A user can disable the accessibility service in Settings, force stop the app, or
+  uninstall it. Blocking that needs Device Admin, which is heavily restricted. Locking
+  the Settings app raises the bar, since all three routes go through it.
 - Aggressive OEM task-killers (Xiaomi, Oppo, Huawei, Samsung) kill background
-  services; those devices need manual whitelisting.
+  services; `LockGuardService` and `WatchdogJob` recover from that within a job tick,
+  but those devices still want manual whitelisting to avoid the gap entirely.
 - There is a brief window where the locked app is visible before the gate lands —
   short with the accessibility watcher, clearly visible with the poller.
 - If no biometric is enrolled *and* no screen lock is set, the gate opens rather than

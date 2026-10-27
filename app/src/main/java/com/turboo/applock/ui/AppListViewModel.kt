@@ -21,7 +21,6 @@ import java.io.File
 
 enum class AppFilter { ALL, LOCKED, UNLOCKED }
 
-/** Where the update flow has got to, so the banner can say something useful. */
 sealed interface UpdateState {
     data object Idle : UpdateState
     data object Checking : UpdateState
@@ -38,23 +37,18 @@ data class AppListUiState(
     val themeMode: ThemeMode = ThemeMode.SYSTEM,
     val filter: AppFilter = AppFilter.ALL,
     val loading: Boolean = true,
+    val settingsTipDismissed: Boolean = false,
 ) {
     val lockedCount: Int get() = lockedPackages.size
 }
 
 class AppListViewModel(application: Application) : AndroidViewModel(application) {
-
     private val repository = AppLockApplication.repository()
 
     private val allApps = MutableStateFlow<List<InstalledApp>>(emptyList())
     private val loading = MutableStateFlow(true)
     private val _filter = MutableStateFlow(AppFilter.ALL)
 
-    /**
-     * Read directly rather than folded into [uiState]: the gate in MainActivity has
-     * to distinguish "not loaded yet" from "off", or it would flash the settings
-     * list before the preference arrives.
-     */
     val selfLockEnabled = repository.selfLockEnabled
 
     private val _query = MutableStateFlow("")
@@ -63,14 +57,21 @@ class AppListViewModel(application: Application) : AndroidViewModel(application)
     private val _updateState = MutableStateFlow<UpdateState>(UpdateState.Idle)
     val updateState: StateFlow<UpdateState> = _updateState.asStateFlow()
 
-    private data class Settings(val relockDelay: Long, val theme: ThemeMode, val filter: AppFilter)
+    private data class Settings(
+        val relockDelay: Long,
+        val theme: ThemeMode,
+        val filter: AppFilter,
+        val settingsTipDismissed: Boolean,
+    )
 
-    // combine() takes at most five flows, so the settings are folded into one.
     private val settings = combine(
         repository.relockDelayMillis,
         repository.themeMode,
         _filter,
-    ) { delay, theme, filter -> Settings(delay, theme, filter) }
+        repository.settingsTipDismissed,
+    ) { delay, theme, filter, tipDismissed ->
+        Settings(delay, theme, filter, tipDismissed)
+    }
 
     val uiState: StateFlow<AppListUiState> =
         combine(
@@ -79,7 +80,7 @@ class AppListViewModel(application: Application) : AndroidViewModel(application)
             settings,
             _query,
             loading,
-        ) { apps, locked, (delay, theme, filter), query, isLoading ->
+        ) { apps, locked, (delay, theme, filter, tipDismissed), query, isLoading ->
             val matching = apps
                 .filter { query.isBlank() || it.label.contains(query, ignoreCase = true) }
                 .filter {
@@ -91,7 +92,7 @@ class AppListViewModel(application: Application) : AndroidViewModel(application)
                 }
 
             AppListUiState(
-                // Locked apps float to the top so the current setup is visible at a glance.
+
                 apps = matching.sortedWith(
                     compareByDescending<InstalledApp> { it.packageName in locked }
                         .thenBy { it.label.lowercase() }
@@ -101,6 +102,7 @@ class AppListViewModel(application: Application) : AndroidViewModel(application)
                 themeMode = theme,
                 filter = filter,
                 loading = isLoading,
+                settingsTipDismissed = tipDismissed,
             )
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), AppListUiState())
 
@@ -132,11 +134,14 @@ class AppListViewModel(application: Application) : AndroidViewModel(application)
         viewModelScope.launch { repository.setThemeMode(mode) }
     }
 
+    fun dismissSettingsTip() {
+        viewModelScope.launch { repository.setSettingsTipDismissed(true) }
+    }
+
     fun setSelfLockEnabled(enabled: Boolean) {
         viewModelScope.launch { repository.setSelfLockEnabled(enabled) }
     }
 
-    /** Silent on failure unless asked explicitly: a failed check on launch is not news. */
     fun checkForUpdate(userInitiated: Boolean = false) {
         viewModelScope.launch {
             _updateState.value = UpdateState.Checking

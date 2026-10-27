@@ -19,6 +19,11 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Android
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
@@ -33,6 +38,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.turboo.applock.data.InstalledApp
@@ -43,6 +49,11 @@ fun HomeScreen(
     state: AppListUiState,
     query: String,
     updateState: UpdateState,
+    permissions: PermissionState,
+    settingsPackage: String?,
+    onOpenSetup: () -> Unit,
+    onLockPackage: (String) -> Unit,
+    onDismissSettingsTip: () -> Unit,
     onQueryChange: (String) -> Unit,
     onFilterChange: (AppFilter) -> Unit,
     onToggleLock: (String, Boolean) -> Unit,
@@ -78,6 +89,18 @@ fun HomeScreen(
             modifier = Modifier.fillMaxSize().padding(innerPadding),
             contentPadding = PaddingValues(bottom = 24.dp),
         ) {
+            item {
+                ProtectionStatusCard(
+                    permissions = permissions,
+                    settingsPackage = settingsPackage,
+                    lockedPackages = state.lockedPackages,
+                    settingsTipDismissed = state.settingsTipDismissed,
+                    onOpenSetup = onOpenSetup,
+                    onLockPackage = onLockPackage,
+                    onDismissSettingsTip = onDismissSettingsTip,
+                )
+            }
+
             item {
                 UpdateBanner(
                     state = updateState,
@@ -195,3 +218,126 @@ private fun AppRow(
         Switch(checked = locked, onCheckedChange = onToggle)
     }
 }
+
+@Composable
+private fun ProtectionStatusCard(
+    permissions: PermissionState,
+    settingsPackage: String?,
+    lockedPackages: Set<String>,
+    settingsTipDismissed: Boolean,
+    onOpenSetup: () -> Unit,
+    onLockPackage: (String) -> Unit,
+    onDismissSettingsTip: () -> Unit,
+) {
+    val settingsUnlocked = settingsPackage != null &&
+        settingsPackage !in lockedPackages &&
+        !settingsTipDismissed
+
+    val problem = when {
+        !permissions.allCriticalGranted -> ProtectionProblem(
+            title = "AppLock is not locking anything",
+            detail = "It cannot tell which app you open, so every locked app is opening " +
+                "freely. Finish setup to turn locking back on.",
+            severe = true,
+            actionLabel = "Fix setup",
+            onAction = onOpenSetup,
+        )
+
+        !permissions.accessibility -> ProtectionProblem(
+            title = "Running in fallback mode",
+            detail = "A locked app can flash on screen before the lock appears, and the " +
+                "check costs battery. Turning on the AppLock watcher under Accessibility " +
+                "fixes both.",
+            severe = false,
+            actionLabel = "Fix setup",
+            onAction = onOpenSetup,
+        )
+
+        !permissions.batteryExempt -> ProtectionProblem(
+            title = "Android may stop AppLock in the background",
+            detail = "Without a battery optimisation exemption, Android can kill the " +
+                "watcher and locking quietly stops working until you reopen AppLock.",
+            severe = false,
+            actionLabel = "Fix setup",
+            onAction = onOpenSetup,
+        )
+
+        settingsUnlocked -> ProtectionProblem(
+            title = "Lock Settings to stop AppLock being switched off",
+            detail = "Force-stopping AppLock, turning off its accessibility service and " +
+                "uninstalling it all happen in Settings. Locking Settings means each of " +
+                "those needs your fingerprint first.",
+            severe = false,
+            actionLabel = "Lock Settings",
+            onAction = { settingsPackage?.let(onLockPackage) },
+            onDismiss = onDismissSettingsTip,
+        )
+
+        else -> null
+    } ?: return
+
+    val container = if (problem.severe) {
+        MaterialTheme.colorScheme.errorContainer
+    } else {
+        MaterialTheme.colorScheme.surfaceContainerHighest
+    }
+    val accent = if (problem.severe) {
+        MaterialTheme.colorScheme.error
+    } else {
+        MaterialTheme.colorScheme.onSurfaceVariant
+    }
+
+    Card(
+        colors = CardDefaults.cardColors(containerColor = container),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp)
+            .padding(bottom = 12.dp),
+    ) {
+        Column(Modifier.padding(16.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = Icons.Filled.Warning,
+                    contentDescription = null,
+                    tint = accent,
+                    modifier = Modifier.size(20.dp),
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    text = problem.title,
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                )
+            }
+
+            Spacer(Modifier.height(8.dp))
+            Text(
+                text = problem.detail,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+
+            Spacer(Modifier.height(12.dp))
+            Row(
+                horizontalArrangement = Arrangement.End,
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                problem.onDismiss?.let {
+                    TextButton(onClick = it) { Text("Not now") }
+                    Spacer(Modifier.width(8.dp))
+                }
+                Button(onClick = problem.onAction) { Text(problem.actionLabel) }
+            }
+        }
+    }
+}
+
+private data class ProtectionProblem(
+    val title: String,
+    val detail: String,
+    val severe: Boolean,
+    val actionLabel: String,
+    val onAction: () -> Unit,
+    val onDismiss: (() -> Unit)? = null,
+)

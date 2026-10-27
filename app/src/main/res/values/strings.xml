@@ -3,8 +3,12 @@
     <string name="accessibility_label">AppLock app watcher</string>
     <string name="accessibility_description">Lets AppLock see which app you just opened, so it can ask for your fingerprint or PIN before a locked app appears. AppLock never reads screen contents.</string>
     <string name="channel_name">App watcher</string>
+    <string name="channel_alert_name">Protection warnings</string>
     <string name="unlock_title">Unlock %1$s</string>
     <string name="unlock_subtitle">Use your fingerprint, face or device PIN</string>
     <string name="notification_title">AppLock is watching</string>
     <string name="notification_text">Locked apps will ask for your fingerprint or PIN</string>
+    <string name="notification_text_polling">Fallback mode — a locked app may flash briefly before the lock appears</string>
+    <string name="notification_title_down">AppLock is not locking anything</string>
+    <string name="notification_text_down">AppLock can no longer tell which app you open, so your locked apps are opening freely. Tap to fix it.</string>
 </resources>
