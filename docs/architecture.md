@@ -44,11 +44,13 @@ app/src/main/java/com/turboo/applock/
 ├── data/
 │   ├── LockRepository.kt        DataStore: locked packages, re-lock delay, theme, self-lock
 │   ├── SessionGate.kt           In-memory "already authenticated" state (never persisted)
+│   ├── PauseState.kt            In-memory deadline while locking is paused (never persisted)
 │   ├── InstalledApps.kt         Launchable-app list + icons for the picker
 │   └── ThemeMode.kt             System / Light / Dark
 ├── service/
 │   ├── AppWatchService.kt       AccessibilityService watcher
 │   ├── LockGuardService.kt      Keeps the process resident; polls if the watcher dies
+│   ├── LockTileService.kt       Quick Settings tile: pause locking, or resume early
 │   └── WatchdogJob.kt           Persisted job that restarts the guard after a kill
 ├── receiver/BootReceiver.kt     Starts the guard after a reboot
 ├── update/AvailableUpdate.kt    A release newer than the installed one; shared by both flavours
@@ -60,6 +62,7 @@ app/src/main/java/com/turboo/applock/
     ├── SettingsScreen.kt        Re-lock delay, theme, lock-AppLock-itself, version
     ├── UpdateBanner.kt          Silent until there is something to say
     ├── LockScreenActivity.kt    The gate; FragmentActivity (BiometricPrompt requires it)
+    ├── PauseAuthActivity.kt     Authenticates a pause before the tile may switch locking off
     ├── LockScreen.kt            Gate UI
     ├── BiometricAuth.kt         Shared system-prompt helper, including the API 28–29 quirk
     └── theme/Theme.kt           Light/dark schemes, Material You where the device has it

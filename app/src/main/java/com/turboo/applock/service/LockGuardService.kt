@@ -15,6 +15,7 @@ import android.os.SystemClock
 import com.turboo.applock.AppLockApplication
 import com.turboo.applock.Permissions
 import com.turboo.applock.R
+import com.turboo.applock.data.PauseState
 import com.turboo.applock.data.SessionGate
 import com.turboo.applock.ui.LockScreenActivity
 import com.turboo.applock.ui.MainActivity
@@ -29,13 +30,16 @@ import kotlinx.coroutines.launch
 class LockGuardService : Service() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
-    private enum class Mode { ACCESSIBILITY, POLLING, DOWN }
+    private enum class Mode { ACCESSIBILITY, POLLING, PAUSED, DOWN }
 
     @Volatile
     private var lockedPackages: Set<String> = emptySet()
 
     private var lastSeenPackage: String? = null
     private var startedAt = 0L
+
+    @Volatile
+    private var lastMode: Mode? = null
 
     override fun onCreate() {
         super.onCreate()
@@ -56,7 +60,11 @@ class LockGuardService : Service() {
         scope.launch { heartbeat() }
     }
 
-    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int = START_STICKY
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        // A pause began or ended: repaint now instead of up to a heartbeat later.
+        if (intent?.action == ACTION_REFRESH) applyMode(currentMode())
+        return START_STICKY
+    }
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -73,14 +81,10 @@ class LockGuardService : Service() {
 
     private suspend fun heartbeat() {
         val usage = getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
-        var lastMode: Mode? = null
 
         while (scope.isActive) {
             val mode = currentMode()
-            if (mode != lastMode) {
-                onModeChanged(mode)
-                lastMode = mode
-            }
+            applyMode(mode)
 
             if (mode == Mode.POLLING) {
                 pollOnce(usage)
@@ -92,6 +96,10 @@ class LockGuardService : Service() {
     }
 
     private fun currentMode(): Mode {
+        // Checked first: while paused, which watcher is live changes nothing the
+        // user can see, and the notification has to say that locking is off.
+        if (PauseState.isPaused) return Mode.PAUSED
+
         if (AppWatchService.isRunning) return Mode.ACCESSIBILITY
 
         val binding = Permissions.isAccessibilityEnabled(this) &&
@@ -100,12 +108,21 @@ class LockGuardService : Service() {
         return if (Permissions.hasUsageAccess(this)) Mode.POLLING else Mode.DOWN
     }
 
+    private fun applyMode(mode: Mode) {
+        if (mode == lastMode) return
+        lastMode = mode
+        onModeChanged(mode)
+    }
+
     private fun onModeChanged(mode: Mode) {
         SessionGate.clearAll()
         lastSeenPackage = null
 
         notificationManager().notify(NOTIFICATION_ID, buildNotification(mode))
         if (mode == Mode.DOWN) raiseAlert() else notificationManager().cancel(ALERT_ID)
+
+        // A pause that ran out has to reach the tile, which cannot poll for itself.
+        LockTileService.requestUpdate(this)
     }
 
     private fun pollOnce(usage: UsageStatsManager) {
@@ -146,6 +163,8 @@ class LockGuardService : Service() {
 
         SessionGate.onForegroundChanged(packageName)
 
+        if (PauseState.isPaused) return
+
         if (packageName !in lockedPackages) {
             SessionGate.lockScreenVisibleFor = null
             return
@@ -174,11 +193,13 @@ class LockGuardService : Service() {
 
         val title = when (mode) {
             Mode.ACCESSIBILITY, Mode.POLLING -> R.string.notification_title
+            Mode.PAUSED -> R.string.notification_title_paused
             Mode.DOWN -> R.string.notification_title_down
         }
         val text = when (mode) {
             Mode.ACCESSIBILITY -> R.string.notification_text
             Mode.POLLING -> R.string.notification_text_polling
+            Mode.PAUSED -> R.string.notification_text_paused
             Mode.DOWN -> R.string.notification_text_down
         }
         return Notification.Builder(this, CHANNEL_ID)
@@ -234,6 +255,23 @@ class LockGuardService : Service() {
         private const val HEARTBEAT_INTERVAL_MILLIS = 5_000L
 
         private const val BIND_GRACE_MILLIS = 8_000L
+
+        private const val ACTION_REFRESH = "com.turboo.applock.action.REFRESH"
+
+        /**
+         * Locking was paused or resumed. Does nothing when the guard is not needed,
+         * so a tile tap with nothing locked cannot start a foreground service.
+         */
+        fun refresh(context: Context) {
+            val known = AppLockApplication.repository().cachedLockedPackages
+            if (known != null && known.isEmpty()) return
+
+            runCatching {
+                context.startForegroundService(
+                    Intent(context, LockGuardService::class.java).setAction(ACTION_REFRESH)
+                )
+            }
+        }
 
         fun ensureRunning(context: Context, force: Boolean = false) {
             WatchdogJob.schedule(context)

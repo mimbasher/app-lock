@@ -75,6 +75,22 @@ is locked again. An unlock ends when:
 - the user leaves the app (when re-lock is set to *Immediately*), or
 - the configured delay elapses (1 or 5 minutes).
 
+### Pausing
+
+A Quick Settings tile suspends locking for 15 minutes — for handing the phone to
+someone, or for testing something without the gate in the way. It comes back by
+itself, and tapping the tile again brings it back early.
+
+Pausing asks for the same authentication the gate does. A tile that switched
+locking off on one tap would be a bypass of the entire app, reachable from the
+shade over a locked phone, so the tap only opens a prompt and the pause begins
+once that prompt passes. Resuming never asks: turning protection back on cannot
+need permission.
+
+Like an unlock, the pause is held in memory only, so a process death comes back
+locking rather than paused. While it is running, the guard notification says
+AppLock is paused rather than claiming to watch.
+
 ## Build
 
 Requires the Android SDK and **JDK 21** — AGP does not run on JDK 26, so
@@ -167,7 +183,6 @@ These are inherent to doing this without system privileges:
 - Intruder photo after failed attempts
 - Auto-lock newly installed apps
 - Hide locked apps from the recents switcher
-- Quick Settings tile to pause locking
 - Per-app re-lock delay
 - Backup and restore the locked list
 - Uninstall protection (Device Admin)

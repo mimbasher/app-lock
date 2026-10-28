@@ -9,6 +9,7 @@ import android.content.pm.PackageManager
 import android.view.accessibility.AccessibilityEvent
 import androidx.core.content.ContextCompat
 import com.turboo.applock.AppLockApplication
+import com.turboo.applock.data.PauseState
 import com.turboo.applock.data.SessionGate
 import com.turboo.applock.ui.LockScreenActivity
 import kotlinx.coroutines.CoroutineScope
@@ -84,6 +85,10 @@ class AppWatchService : AccessibilityService() {
         if (packageName !in launchablePackages && packageName !in lockedPackages) return
 
         SessionGate.onForegroundChanged(packageName)
+
+        // Paused from the Quick Settings tile. Foreground changes are still followed
+        // so the session rules stay honest, but nothing is gated until it expires.
+        if (PauseState.isPaused) return
 
         if (packageName !in lockedPackages) {
             SessionGate.lockScreenVisibleFor = null
