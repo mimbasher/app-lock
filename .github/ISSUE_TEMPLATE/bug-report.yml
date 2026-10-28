@@ -1,0 +1,42 @@
+name: Bug report
+description: Something behaves wrong, or does not build.
+labels: ["bug"]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: And what you expected instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Lock an app
+        2. ...
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Device or emulator, and Android version
+      placeholder: Pixel 6 emulator, Android 15
+    validations:
+      required: true
+  - type: dropdown
+    id: flavour
+    attributes:
+      label: Which build?
+      options:
+        - github (APK from Releases)
+        - github, built locally
+        - play
+        - Not sure
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logcat, if you have it
+      description: "`adb logcat | grep -i applock` around the moment it went wrong."
+      render: text
