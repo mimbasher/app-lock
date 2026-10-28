@@ -43,12 +43,13 @@ Without the first two, nothing locks, and that is not a bug.
 
 ## Where things live
 
-The [source map](README.md#source-map) in the README lists every file and what
-it does. Two things are worth knowing before you change behaviour:
+The [source map](docs/architecture.md#source-map) lists every file and what it
+does. Two things are worth knowing before you change behaviour:
 
 - **The watchers.** `AppWatchService` (accessibility events) is the primary
-  path; `ForegroundPollService` (usage-stats polling) is the fallback. A change
-  to lock behaviour usually has to hold for both.
+  path; `LockGuardService` (usage-stats polling) is the fallback, and it also
+  keeps the process alive. A change to lock behaviour usually has to hold for
+  both.
 - **The updater is flavour-split.** The real `UpdateChecker`/`UpdateInstaller`
   live in `src/github`, inert stubs with the same signatures live in `src/play`,
   and `AvailableUpdate` is shared from `src/main`. If you change one side's
