@@ -11,7 +11,7 @@ or a paid service. If you can build an Android app, you can build this one.
 - **JDK 21.** AGP does not run on JDK 26, so `gradle.properties` pins
   `org.gradle.java.home` to `/usr/lib/jvm/java-21-openjdk`. Change that line if
   your JDK lives elsewhere — but do not commit the change.
-- **Android SDK**, API 35 (`compileSdk`/`targetSdk`). Android Studio or a bare
+- **Android SDK**, API 36 (`compileSdk`/`targetSdk`). Android Studio or a bare
   `cmdline-tools` install both work.
 - **A device or emulator on API 26+** (`minSdk = 26`).
 
