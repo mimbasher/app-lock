@@ -31,6 +31,8 @@ fun LockScreen(
     appLabel: String,
     appIcon: Bitmap?,
     themeMode: ThemeMode,
+    statusText: String = "Locked",
+    actionText: String = "Unlock",
     onUnlockClick: () -> Unit,
 ) {
     AppLockTheme(themeMode) {
@@ -72,15 +74,16 @@ fun LockScreen(
                     Spacer(Modifier.height(8.dp))
 
                     Text(
-                        text = "Locked",
+                        text = statusText,
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center,
                     )
 
                     Spacer(Modifier.height(40.dp))
 
                     Button(onClick = onUnlockClick) {
-                        Text("Unlock")
+                        Text(actionText)
                     }
                 }
             }
