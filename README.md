@@ -281,8 +281,8 @@ The most useful contribution needs no code at all: a **real-device report**.
 The fingerprint path has only ever run against an emulator's PIN, and OEM
 background-killing is untested — if you run AppLock on a real phone,
 especially a Xiaomi, Oppo, Huawei or Samsung,
-[open an issue](https://github.com/mimbasher/app-lock/issues) saying what it
-did.
+[open a device report](https://github.com/mimbasher/app-lock/issues/new?template=device-report.yml)
+saying what it did.
 
 If AppLock is useful to you, a ⭐ helps other people find it.
 

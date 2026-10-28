@@ -1,0 +1,66 @@
+name: Real-device report
+description: You ran AppLock on a real phone. Say what it did.
+title: "Device report: "
+labels: ["device-report"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        The most useful report there is. The fingerprint path has only ever run
+        against an emulator's PIN, and OEM background-killing is untested, so
+        anything you saw on real hardware is new information — including
+        "everything worked".
+  - type: input
+    id: device
+    attributes:
+      label: Phone
+      description: Manufacturer and model.
+      placeholder: Xiaomi Redmi Note 12
+    validations:
+      required: true
+  - type: input
+    id: android
+    attributes:
+      label: Android version and OEM skin
+      placeholder: Android 14, MIUI 14
+    validations:
+      required: true
+  - type: dropdown
+    id: watcher
+    attributes:
+      label: Which watcher was in force?
+      description: The guard notification names the mode actually running.
+      options:
+        - Accessibility (AppWatchService)
+        - Polling (LockGuardService fallback)
+        - Neither — nothing was protecting anything
+        - Not sure
+    validations:
+      required: true
+  - type: dropdown
+    id: auth
+    attributes:
+      label: How did you unlock the gate?
+      options:
+        - Fingerprint
+        - Face
+        - PIN / pattern / password
+        - The gate opened without asking
+    validations:
+      required: true
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: >
+        Did the gate land before you could touch the app? Did it survive a
+        recents swipe, a reboot, or the battery manager overnight? Anything
+        that looked wrong.
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: AppLock version
+      description: Settings → the version at the bottom.
+      placeholder: 1.42
